@@ -1,6 +1,6 @@
 {
- "name": "Agence",
- "short_name": "Agence",
+ "name": "Immo Gest",
+ "short_name": "Immo Gest",
  "start_url": "./",
  "scope": "./",
  "display": "standalone",
