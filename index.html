@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agence – gestion immobilière</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Agence">
+<meta name="theme-color" content="#1f5c4d">
 <style>
 :root{--bg:#f3f5f2;--sf:#fff;--tx:#1d2a26;--mu:#6a7873;--bd:#d9dfdb;--ac:#1f5c4d;--ac2:#e9f1ee;--rd:#b3402f;--am:#a8741a;font-family:"Segoe UI",system-ui,sans-serif;color-scheme:light}
 @media (prefers-color-scheme:dark){:root{--bg:#141a18;--sf:#1c2421;--tx:#e6ece9;--mu:#8fa099;--bd:#2f3b37;--ac:#5fb59f;--ac2:#23322d;--rd:#e07a69;--am:#d9a441;color-scheme:dark}}
@@ -183,8 +188,8 @@ const b64=s=>btoa(unescape(encodeURIComponent(s))),unb64=s=>decodeURIComponent(e
 const api=()=>`https://api.github.com/repos/${C.repo}/contents/${C.path||'data.json'}`;
 const hd=()=>({Authorization:'Bearer '+C.token,Accept:'application/vnd.github+json'});
 async function getRemote(){const r=await fetch(api(),{headers:hd()});if(r.status===404)return null;if(!r.ok)throw new Error('GitHub '+r.status);return r.json()}
-async function push(){try{status('Envoi…');const rm=await getRemote();const body={message:'Mise à jour '+new Date().toISOString(),content:b64(JSON.stringify(D,null,1))};if(rm)body.sha=rm.sha;
-const r=await fetch(api(),{method:'PUT',headers:hd(),body:JSON.stringify(body)});if(!r.ok)throw new Error('GitHub '+r.status);status('Synchronisé '+new Date().toLocaleTimeString('fr-FR'))}catch(e){status('Erreur : '+e.message)}}
+async function push(){if(!navigator.onLine){localStorage.setItem('agence_pending','1');status('Hors connexion : modifications gardées sur cet appareil');return}try{status('Envoi…');const rm=await getRemote();const body={message:'Mise à jour '+new Date().toISOString(),content:b64(JSON.stringify(D,null,1))};if(rm)body.sha=rm.sha;
+const r=await fetch(api(),{method:'PUT',headers:hd(),body:JSON.stringify(body)});if(!r.ok)throw new Error('GitHub '+r.status);localStorage.removeItem('agence_pending');status('Synchronisé '+new Date().toLocaleTimeString('fr-FR'))}catch(e){status('Erreur : '+e.message)}}
 async function pull(){try{status('Récupération…');const rm=await getRemote();if(!rm){status('Aucun fichier distant');return}D=JSON.parse(unb64(rm.content));norm();localStorage.setItem('agence_data',JSON.stringify(D));render();status('Données récupérées')}catch(e){status('Erreur : '+e.message)}}
 $('#bSync').onclick=()=>{$('#syncBody').innerHTML=`<h2 style="margin:0">Synchronisation GitHub</h2>
 <label>Dépôt (utilisateur/nom)</label><input id="sr" value="${esc(C.repo||'')}" placeholder="monnom/agence-donnees">
@@ -200,6 +205,9 @@ $('#im').onclick=()=>$('#fi').click();
 $('#fi').onchange=async ev=>{try{D=JSON.parse(await ev.target.files[0].text());norm();save();render();$('#dSync').close()}catch(e){alert('Fichier invalide')}}};
 $('#dSync').addEventListener('click',ev=>{if(ev.target.id==='dSync')ev.target.close()});
 render();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+addEventListener('online',()=>{if(localStorage.getItem('agence_pending'))status('Connexion rétablie : ouvrez Synchronisation puis « Enregistrer et envoyer »')});
+if(localStorage.getItem('agence_pending')&&navigator.onLine)status('Modifications non envoyées : ouvrez Synchronisation puis « Enregistrer et envoyer »');
 </script>
 </body>
 </html>
