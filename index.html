@@ -151,6 +151,8 @@ Object.assign(LANGS.en,{'Ville(s) recherchée(s)':'Desired cities','Ville recher
 Object.assign(LANGS.ar,{'Ville(s) recherchée(s)':'المدن المطلوبة','Ville recherchée':'المدينة المطلوبة','Zone(s) recherchée(s)':'المناطق المطلوبة','Quartier ou zone':'الحي أو المنطقة','Ajouter une autre':'إضافة حقل آخر'});
 Object.assign(LANGS.en,{"Aucune correspondance pour l'instant. Complétez le budget, le type, les villes et les zones dans les fiches clients.":"No matches yet. Complete each client's budget, type, desired cities, and areas."});
 Object.assign(LANGS.ar,{"Aucune correspondance pour l'instant. Complétez le budget, le type, les villes et les zones dans les fiches clients.":"لا توجد مطابقات حالياً. أكمل الميزانية والنوع والمدن والمناطق المطلوبة في سجلات العملاء."});
+Object.assign(LANGS.en,{'Budget respecté':'Within budget','Dépasse le budget':'Over budget','Surface conforme':'Meets minimum area','Surface inférieure':'Below minimum area','Ville correspondante':'City matches','Ville différente':'Different city','Zone correspondante':'Area matches','Ville non renseignée':'City not provided','Adresse non renseignée':'Area not provided','Surface non renseignée':'Area not provided','Budget non renseigné':'Budget not provided'});
+Object.assign(LANGS.ar,{'Budget respecté':'ضمن الميزانية','Dépasse le budget':'يتجاوز الميزانية','Surface conforme':'المساحة مطابقة','Surface inférieure':'المساحة أقل من المطلوب','Ville correspondante':'المدينة مطابقة','Ville différente':'مدينة مختلفة','Zone correspondante':'المنطقة مطابقة','Ville non renseignée':'المدينة غير محددة','Adresse non renseignée':'المنطقة غير محددة','Surface non renseignée':'المساحة غير محددة','Budget non renseigné':'الميزانية غير محددة'});
 const SYNC_HELP='Utilisez un dépôt privé et un jeton fin (fine-grained) limité à ce dépôt, avec la permission « Contents : lecture et écriture ». Le jeton reste dans ce navigateur uniquement; configurez-le sur chacun de vos appareils. Les modifications sont envoyées automatiquement; les nouvelles données sont vérifiées à l’ouverture, au retour en ligne et chaque minute.';
 LANGS.en[SYNC_HELP]='Use a private repository and a fine-grained token limited to that repository, with “Contents: read and write” permission. The token stays in this browser only; configure it on each of your devices. Changes are sent automatically; new data is checked on launch, when back online, and every minute.';
 LANGS.ar[SYNC_HELP]='استخدم مستودعاً خاصاً ورمز وصول دقيقاً محدوداً بذلك المستودع، مع صلاحية «Contents: القراءة والكتابة». يبقى الرمز في هذا المتصفح فقط؛ قم بإعداده على كل جهاز. تُرسل التغييرات تلقائياً، ويتم التحقق من البيانات الجديدة عند الفتح وعند العودة إلى الاتصال وكل دقيقة.';
@@ -321,6 +323,7 @@ let F={q:'',a:'',b:'',city:'',type:'',pmin:'',pmax:''};
 const FA={biens:'statut',clients:'role',visites:'statut',loyers:'statut',offres:'statut',relances:'statut',factures:'statut',annonces:'statut'};
 function lab(o,id){const x=D[o].find(y=>y.id===id);return x?E[o].lab(x):''}
 function propertyLocation(b){return[b?.ville,b?.adr].filter(Boolean).join(', ')}
+function normalizeMatchText(value){return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLocaleLowerCase()}
 function filt(){const e=E[tab],q=F.q.toLowerCase(),city=F.city.trim().toLocaleLowerCase();return D[tab].filter(r=>{if(F.a&&r[FA[tab]]!==F.a)return false;if(F.b&&r.trans!==F.b)return false;if(tab==='biens'){if(city&&!String(r.ville||'').toLocaleLowerCase().includes(city))return false;if(F.type&&r.type!==F.type)return false;
 if(F.pmin||F.pmax){if(r.prix===''||r.prix==null||!Number.isFinite(Number(r.prix)))return false;const price=Number(r.prix);if(F.pmin&&price<Number(F.pmin))return false;if(F.pmax&&price>Number(F.pmax))return false}}
 return !q||e.f.some(([k,,t,o])=>String(t==='ref'?lab(o,r[k]):r[k]??'').toLowerCase().includes(q))})}
@@ -352,13 +355,16 @@ const LOGO="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHIAAAB4CAYAAAAuRqYbAA
 const nz=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const today=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
 function score(c,b){if(c.role!=='Acquéreur'&&c.role!=='Locataire')return null;if(b.statut&&b.statut!=='Disponible')return null;if((c.role==='Acquéreur')!==(b.trans==='Vente'))return null;
-let tot=0,ok=0;const notes=[];
-if(c.type_rech&&c.type_rech!=='Indifférent'){tot++;if(c.type_rech!==b.type)return null;ok++}
-if(c.sous_type_rech&&c.sous_type_rech!=='Indifférent'){tot++;if(c.sous_type_rech!==b.sous_type)return null;ok++}
-const bud=Number(c.budget||0),pr=Number(b.prix||0);if(bud&&pr){tot++;if(pr>bud*1.1)return null;if(pr>bud)notes.push('Un peu au-dessus du budget');else ok++}
-const sm=Number(c.surfmin||0),sf=Number(b.surf||0);if(sm&&sf){tot++;if(sf<sm)return null;ok++}
-const areas=[...nz(c.villes_rech).split(/[,;\/]+/),...nz(c.zone).split(/[,;\/]+/)].map(x=>x.trim()).filter(Boolean),location=propertyLocation(b).toLocaleLowerCase();if(areas.length){tot++;if(areas.some(z=>location.includes(z.toLocaleLowerCase())))ok++;else notes.push('Zone à vérifier')}
-return {s:tot?Math.round(ok/tot*100):50,notes,tot}}
+const notes=[],criteria=[];if(c.type_rech&&c.type_rech!=='Indifférent'&&c.type_rech!==b.type)return null;
+if(c.sous_type_rech&&c.sous_type_rech!=='Indifférent'&&c.sous_type_rech!==b.sous_type)return null;
+const add=(weight,score,note)=>{criteria.push({weight,score});if(note)notes.push(note)},number=value=>value!==''&&value!=null&&Number.isFinite(Number(value))?Number(value):null;
+const budget=number(c.budget),price=number(b.prix);if(budget){if(price===null)notes.push('Budget non renseigné');else{const ratio=price/budget,score=ratio<=1?100:Math.max(0,100-(ratio-1)*200);add(3,score,ratio<=1?'Budget respecté':'Dépasse le budget')}}
+const minArea=number(c.surfmin),area=number(b.surf);if(minArea){if(area===null)notes.push('Surface non renseignée');else{const score=Math.min(100,area/minArea*100);add(2,score,area>=minArea?'Surface conforme':'Surface inférieure')}}
+const cities=[...nz(c.villes_rech).split(/[,;\/]+/)].map(normalizeMatchText).filter(Boolean),desiredAreas=[...nz(c.zone).split(/[,;\/]+/)].map(normalizeMatchText).filter(Boolean),propertyCity=normalizeMatchText(b.ville),propertyAddress=normalizeMatchText(b.adr);
+if(cities.length){if(!propertyCity&&!propertyAddress)notes.push('Ville non renseignée');else{const matches=cities.some(city=>propertyCity===city||propertyAddress.includes(city));add(3,matches?100:0,matches?'Ville correspondante':'Ville différente')}}
+if(desiredAreas.length){if(!propertyAddress)notes.push('Adresse non renseignée');else{const matches=desiredAreas.some(area=>propertyAddress.includes(area));add(2,matches?100:0,matches?'Zone correspondante':'Zone à vérifier')}}
+const totalWeight=criteria.reduce((sum,c)=>sum+c.weight,0),s=totalWeight?Math.round(criteria.reduce((sum,c)=>sum+c.weight*c.score,0)/totalWeight):50;
+return {s,notes,tot:criteria.length}}
 const matchClients=b=>D.clients.map(c=>({it:c,...(score(c,b)||{s:-1})})).filter(x=>x.s>=0).sort((a,b)=>b.s-a.s);
 const matchBiens=c=>D.biens.map(b=>({it:b,...(score(c,b)||{s:-1})})).filter(x=>x.s>=0).sort((a,b)=>b.s-a.s);
 function waMatch(c,b){const v=b.trans==='Vente',kind=[b.type,b.sous_type].filter(Boolean).map(tr).join(' — ')||tr('Bien'),location=propertyLocation(b);return `${tr('Bonjour')} ${c.nom},\n\n${tr("J'ai un bien qui pourrait vous intéresser :")} ${kind} ${v?tr('à vendre'):tr('à louer')}${b.titre?' — '+b.titre:''}${location?'\n📍 '+location:''}${b.surf?'\n📐 '+b.surf+' m²':''}${b.prix?'\n💰 '+fmt(b.prix)+' MAD'+(v?'':' / '+tr('mois')):''}\n\n${tr('Souhaitez-vous le visiter ?')}\n\n${sign()}`}
