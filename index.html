@@ -81,6 +81,7 @@ nav button{color:#b9c3d6}nav button.on{background:rgba(201,164,92,.22);color:#f6
 <dialog id="dQ" style="width:min(640px,96vw)"><label>Signataire (votre nom)</label><input id="qn"><label>Fait à (ville)</label><input id="qc"><div id="qp" style="margin-top:14px;background:#fff;color:#000;padding:20px;border:1px solid var(--bd);line-height:1.5"></div><div class="row"><button class="btn sec" id="qx">Fermer</button><button class="btn" id="qpr">Imprimer</button></div></dialog>
 <dialog id="dV" style="width:min(800px,96vw)"><div id="vb"></div><div class="row"><a id="vd" class="btn sec" style="text-decoration:none">Télécharger</a><button class="btn" id="vx">Fermer</button></div></dialog>
 <dialog id="dSync"><div id="syncBody"></div></dialog>
+<dialog id="dConflict"><div id="conflictBody"></div></dialog>
 
 <script>
 const ST=['Disponible','Sous offre','Vendu / loué'];
@@ -103,7 +104,7 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const uid=()=>Math.random().toString(36).slice(2,10);
 const fmt=n=>n===''||n==null?'':Number(n).toLocaleString('fr-FR');
-function save(){localStorage.setItem('agence_data',JSON.stringify(D));if(C.token&&C.repo){clearTimeout(timer);status('Modifié…');timer=setTimeout(push,2500)}}
+function save(){localStorage.setItem('agence_data',JSON.stringify(D));if(C.token&&C.repo){localStorage.setItem('agence_pending','1');clearTimeout(timer);status('Modifié…');timer=setTimeout(syncNow,2500)}}
 function status(t){$('#st').textContent=t}
 function show(k,e,v){const f=e.f.find(x=>x[0]===k);if(f[2]==='ref'){const r=D[f[3]].find(x=>x.id===v);return r?esc(E[f[3]].lab(r)):''}
 if(k==='statut'||k==='role'){const c=['Impayé','Annulée','Refusée','Expirée'].includes(v)?'r':['En attente','Sous offre','Contre-offre','À faire','À payer','Brouillon','À publier'].includes(v)?'a':'';return`<span class="tag ${c}">${esc(v)}</span>`}
@@ -365,31 +366,53 @@ ${r.surf?`<p>Surface : ${esc(r.surf)} m²${r.prix&&r.trans==='Vente'?' · '+fmt(
 <p style="white-space:pre-wrap">${esc(r.desc||'')}</p><hr><p>Contact : <b>${esc($('#fn').value)}</b> ${esc($('#ft').value)}</p>`};
 $('#fn').oninput=draw;$('#ft').oninput=draw;draw();$('#fx').onclick=()=>$('#dF').close();$('#fpr').onclick=()=>{$('#prt').innerHTML=$('#fv').innerHTML;window.print()};$('#dF').showModal()}
 
-/* ---- GitHub ---- */
+/* ---- Synchronisation GitHub ---- */
 const b64=s=>btoa(unescape(encodeURIComponent(s))),unb64=s=>decodeURIComponent(escape(atob(s.replace(/\n/g,''))));
 const api=()=>`https://api.github.com/repos/${C.repo}/contents/${C.path||'data.json'}`;
 const hd=()=>({Authorization:'Bearer '+C.token,Accept:'application/vnd.github+json'});
+const syncKey='agence_sync_state';
+let syncBusy=false,syncAgain=false,pendingConflict=null,dismissedConflict='';
+const syncTarget=()=>`${C.repo.toLowerCase()}/${C.path||'data.json'}`;
+const snapshot=()=>JSON.stringify(D);
+function syncState(){try{const s=JSON.parse(localStorage.getItem(syncKey)||'null');return s&&s.target===syncTarget()?s:null}catch{return null}}
+function setSyncState(data,sha){localStorage.setItem(syncKey,JSON.stringify({target:syncTarget(),data,sha}))}
 async function getRemote(){const r=await fetch(api(),{headers:hd()});if(r.status===404)return null;if(!r.ok)throw new Error('GitHub '+r.status);return r.json()}
-async function push(){if(!navigator.onLine){localStorage.setItem('agence_pending','1');status('Hors connexion : modifications gardées sur cet appareil');return}try{status('Envoi…');const rm=await getRemote();const body={message:'Mise à jour '+new Date().toISOString(),content:b64(JSON.stringify(D,null,1))};if(rm)body.sha=rm.sha;
-const r=await fetch(api(),{method:'PUT',headers:hd(),body:JSON.stringify(body)});if(!r.ok)throw new Error('GitHub '+r.status);localStorage.removeItem('agence_pending');status('Synchronisé '+new Date().toLocaleTimeString('fr-FR'))}catch(e){status('Erreur : '+e.message)}}
-async function pull(){try{status('Récupération…');const rm=await getRemote();if(!rm){status('Aucun fichier distant');return}D=JSON.parse(unb64(rm.content));norm();localStorage.setItem('agence_data',JSON.stringify(D));render();status('Données récupérées')}catch(e){status('Erreur : '+e.message)}}
+function readRemote(rm){if(!rm.content)throw new Error('Le fichier distant ne peut pas être lu par l’API GitHub.');const data=JSON.parse(unb64(rm.content));if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Le fichier distant ne contient pas de données Immo-Gest valides.');return data}
+function normalizeSnapshot(data){const current=D;D=data;norm();const result={data:D,snapshot:snapshot()};D=current;return result}
+async function putRemote(data,sha){const body={message:'Synchronisation Immo-Gest '+new Date().toISOString(),content:b64(JSON.stringify(JSON.parse(data),null,1))};if(sha)body.sha=sha;const r=await fetch(api(),{method:'PUT',headers:hd(),body:JSON.stringify(body)});if(!r.ok){const error=new Error('GitHub '+r.status+' — la version distante a peut-être changé; relancez la synchronisation.');error.status=r.status;throw error}const result=await r.json();if(!result.content?.sha)throw new Error('GitHub n’a pas confirmé la sauvegarde.');return result.content.sha}
+function downloadBackup(name,data){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function showConflict(remote,sha,reason){const local=snapshot(),key=`${sha||'absent'}:${local}`;if(key===dismissedConflict){status('Conflit en attente de votre choix');return}pendingConflict={remote,sha,local,key};const hasRemote=Boolean(remote);$('#conflictBody').innerHTML=`<h2 style="margin:0">Données différentes détectées</h2><p class="note">${reason}</p><p>${hasRemote?'Pour éviter toute perte, choisissez quelle version conserver. Une copie de l’autre version sera téléchargée avant le remplacement.':'Vos données locales sont conservées. Vous pouvez recréer le fichier distant ou réessayer plus tard.'}</p><div class="row">${hasRemote?'<button class="btn sec" id="keepRemote">Utiliser la version GitHub</button>':''}<button class="btn" id="keepLocal">${hasRemote?'Utiliser cet appareil':'Recréer le fichier GitHub depuis cet appareil'}</button><button class="btn sec" id="closeConflict">Plus tard</button></div>`;$('#keepRemote')?.addEventListener('click',()=>chooseRemote());$('#keepLocal').onclick=()=>chooseLocal();$('#closeConflict').onclick=()=>{dismissedConflict=key;pendingConflict=null;$('#dConflict').close()};if(!$('#dConflict').open)$('#dConflict').showModal();status('Conflit détecté : choisissez la version à conserver')}
+function applyRemote(data,sha){const normalized=normalizeSnapshot(data);D=normalized.data;localStorage.setItem('agence_data',normalized.snapshot);setSyncState(normalized.snapshot,sha);localStorage.removeItem('agence_pending');render()}
+async function chooseRemote(){if(!pendingConflict?.remote)return;const conflict=pendingConflict;downloadBackup('immo-gest-sauvegarde-appareil.json',JSON.parse(conflict.local));try{const latest=await getRemote();if(!latest){showConflict(null,null,'Le fichier distant a disparu pendant votre choix.');return}if(latest.sha!==conflict.sha||snapshot()!==conflict.local){showConflict(readRemote(latest),latest.sha,'La version a changé pendant votre choix. Vérifiez les versions avant de continuer.');return}applyRemote(conflict.remote,conflict.sha);pendingConflict=null;dismissedConflict='';$('#dConflict').close();status('Version GitHub récupérée; copie locale téléchargée')}catch(e){status('Impossible de vérifier la version GitHub : '+e.message)}}
+async function chooseLocal(){if(!pendingConflict)return;const conflict=pendingConflict;if(conflict.remote)downloadBackup('immo-gest-sauvegarde-github.json',conflict.remote);try{const sha=await putRemote(conflict.local,conflict.sha);setSyncState(conflict.local,sha);localStorage.removeItem('agence_pending');pendingConflict=null;dismissedConflict='';$('#dConflict').close();status(conflict.remote?'Version de cet appareil envoyée; copie GitHub téléchargée':'Fichier de synchronisation recréé');if(snapshot()!==conflict.local){localStorage.setItem('agence_pending','1');timer=setTimeout(syncNow,250)}}catch(e){status('Erreur de synchronisation : '+e.message);if(e.status===409||e.status===422){pendingConflict=null;dismissedConflict='';$('#dConflict').close();syncNow()}}}
+async function syncNow(){if(!C.token||!C.repo)return;if(document.querySelector('dialog[open]'))return;if(!navigator.onLine){localStorage.setItem('agence_pending','1');status('Hors connexion : vos données restent sur cet appareil');return}if(syncBusy){syncAgain=true;return}syncBusy=true;const local=snapshot();try{status('Vérification de la synchronisation…');const state=syncState(),rm=await getRemote();if(snapshot()!==local||document.querySelector('dialog[open]')){syncAgain=true;return}
+if(!rm){if(state?.sha){showConflict(null,null,'Le fichier de synchronisation a disparu de GitHub. Vos données locales sont conservées.');return}const sha=await putRemote(local);setSyncState(local,sha);localStorage.removeItem('agence_pending');status('Sauvegarde créée sur GitHub');return}
+const remote=readRemote(rm),normalized=normalizeSnapshot(remote);
+if(!state){if(local===normalized.snapshot){applyRemote(remote,rm.sha);status('Synchronisé');return}showConflict(remote,rm.sha,'Cet appareil n’a pas encore de version de référence commune avec GitHub.');return}
+if(rm.sha===state.sha){if(local===state.data){localStorage.removeItem('agence_pending');status('Synchronisé '+new Date().toLocaleTimeString('fr-FR'));return}const sha=await putRemote(local,rm.sha);setSyncState(local,sha);localStorage.removeItem('agence_pending');status('Sauvegardé sur GitHub '+new Date().toLocaleTimeString('fr-FR'));if(snapshot()!==local)syncAgain=true;return}
+if(local===state.data){applyRemote(remote,rm.sha);status('Nouvelles données récupérées depuis GitHub');return}
+showConflict(remote,rm.sha,'Les données ont changé sur cet appareil et sur GitHub depuis la dernière synchronisation.');
+}catch(e){localStorage.setItem('agence_pending','1');status('Erreur de synchronisation : '+e.message)}finally{syncBusy=false;if(syncAgain){syncAgain=false;clearTimeout(timer);timer=setTimeout(syncNow,250)}}}
 $('#bSync').onclick=()=>{$('#syncBody').innerHTML=`<h2 style="margin:0">Synchronisation GitHub</h2>
 <label>Dépôt (utilisateur/nom)</label><input id="sr" value="${esc(C.repo||'')}" placeholder="monnom/agence-donnees">
 <label>Fichier</label><input id="sp" value="${esc(C.path||'data.json')}">
 <label>Jeton d'accès personnel</label><input id="sk" type="password" value="${esc(C.token||'')}">
-<p class="note">Utilisez un dépôt <b>privé</b> et un jeton fin (fine-grained) limité à ce dépôt, avec la permission « Contents : lecture et écriture ». Le jeton reste dans ce navigateur uniquement.</p>
-<div class="row" style="flex-wrap:wrap"><button class="btn sec" id="pe">Mon entreprise</button><button class="btn sec" id="ex">Exporter JSON</button><button class="btn sec" id="im">Importer JSON</button><button class="btn sec" id="pl">Récupérer</button><button class="btn" id="ps">Enregistrer et envoyer</button></div><input type="file" id="fi" accept=".json" hidden>`;
+<p class="note">Utilisez un dépôt <b>privé</b> et un jeton fin (fine-grained) limité à ce dépôt, avec la permission « Contents : lecture et écriture ». Le jeton reste dans ce navigateur uniquement; configurez-le sur chacun de vos appareils. Les modifications sont envoyées automatiquement; les nouvelles données sont vérifiées à l’ouverture, au retour en ligne et chaque minute.</p>
+<div class="row" style="flex-wrap:wrap"><button class="btn sec" id="pe">Mon entreprise</button><button class="btn sec" id="ex">Exporter JSON</button><button class="btn sec" id="im">Importer JSON</button><button class="btn sec" id="pl">Vérifier / récupérer</button><button class="btn" id="ps">Enregistrer et synchroniser</button></div><input type="file" id="fi" accept=".json" hidden>`;
 $('#dSync').showModal();
 const cfg=()=>{C={repo:$('#sr').value.trim(),path:$('#sp').value.trim()||'data.json',token:$('#sk').value.trim()};localStorage.setItem('agence_cfg',JSON.stringify(C))};
-$('#ps').onclick=()=>{cfg();$('#dSync').close();push()};$('#pl').onclick=()=>{cfg();$('#dSync').close();pull()};
-$('#pe').onclick=()=>{$('#dSync').close();profilDialog()};$('#ex').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(D,null,1)],{type:'application/json'}));a.download='agence-sauvegarde.json';a.click()};
+$('#ps').onclick=()=>{cfg();$('#dSync').close();syncNow()};$('#pl').onclick=()=>{cfg();$('#dSync').close();syncNow()};
+$('#pe').onclick=()=>{$('#dSync').close();profilDialog()};$('#ex').onclick=()=>downloadBackup('agence-sauvegarde.json',D);
 $('#im').onclick=()=>$('#fi').click();
 $('#fi').onchange=async ev=>{try{D=JSON.parse(await ev.target.files[0].text());norm();save();render();$('#dSync').close()}catch(e){alert('Fichier invalide')}}};
 $('#dSync').addEventListener('click',ev=>{if(ev.target.id==='dSync')ev.target.close()});
+$('#dConflict').addEventListener('close',()=>{if(pendingConflict){dismissedConflict=pendingConflict.key;pendingConflict=null}});
 render();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-addEventListener('online',()=>{if(localStorage.getItem('agence_pending'))status('Connexion rétablie : ouvrez Synchronisation puis « Enregistrer et envoyer »')});
-if(localStorage.getItem('agence_pending')&&navigator.onLine)status('Modifications non envoyées : ouvrez Synchronisation puis « Enregistrer et envoyer »');
+addEventListener('online',()=>syncNow());
+addEventListener('offline',()=>{if(C.token&&C.repo){localStorage.setItem('agence_pending','1');status('Hors connexion : vos données restent sur cet appareil')}});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow()});
+if(C.token&&C.repo){if(localStorage.getItem('agence_pending'))status('Synchronisation en attente…');setTimeout(syncNow,400);setInterval(syncNow,60000)}
 </script>
 </body>
 </html>
