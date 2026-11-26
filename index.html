@@ -553,5 +553,6 @@ addEventListener('offline',()=>{if(C.token&&C.repo){localStorage.setItem('agence
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow()});
 if(C.token&&C.repo){if(localStorage.getItem('agence_pending'))status('Synchronisation en attente…');setTimeout(syncNow,400);setInterval(syncNow,60000)}
 </script>
+<script src="partage.js"></script>
 </body>
 </html>
