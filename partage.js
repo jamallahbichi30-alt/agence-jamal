@@ -1,4 +1,5 @@
-/* Immo-Gest — envoi de fichiers en bloc + réception depuis les autres applications (Android)
+/* Immo-Gest — envoi de fichiers en bloc (iPhone, Mac, PC, Android)
+   + réception depuis les autres applications (Android/Chrome uniquement)
    À charger APRÈS le script principal :  <script src="partage.js"></script>  (juste avant </body>) */
 (()=>{
 if(typeof upFile!=='function'||typeof shrink!=='function'||typeof api2!=='function'||typeof hd!=='function'||typeof toB64!=='function'){
@@ -8,6 +9,7 @@ const MAX=25e6;                       // limite par fichier (25 Mo), comme dans 
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const mb=s=>(s/1048576).toFixed(1)+' Mo';
 const SHARE='immo-share';
+const ACCEPT='image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx';
 let batch=null,lastBatch=null;
 
 /* ---------- Barre de progression ---------- */
@@ -92,7 +94,7 @@ window.upFile=async function(r,f){
   return ok;
 };
 
-/* ---------- Réception des fichiers partagés depuis une autre application ---------- */
+/* ---------- Réception des fichiers partagés (Android / Chrome) ---------- */
 async function readShared(){
   const c=await caches.open(SHARE);
   const keys=(await c.keys()).sort((a,b)=>a.url<b.url?-1:1),out=[];
@@ -106,34 +108,47 @@ async function clearShared(){
   try{const c=await caches.open(SHARE);for(const k of await c.keys())await c.delete(k)}catch(e){}
 }
 
-function openShare(files){
+/* ---------- Fenêtre d'envoi : fichiers reçus (files) OU choisis dans l'appli (files=null) ---------- */
+function openDialog(files){
+  const picker=!files;
+  let chosen=files||[],busy=false;
   let d=document.getElementById('dShare');
   if(!d){d=document.createElement('dialog');d.id='dShare';document.body.append(d)}
   const group=(kind,label)=>D[kind]&&D[kind].length
     ?`<optgroup label="${label}">`+D[kind].map(x=>`<option data-no-i18n value="${kind}:${esc(x.id)}">${esc(E[kind].lab(x)||'(sans titre)')}${x.ville?' — '+esc(x.ville):''}</option>`).join('')+'</optgroup>':'';
-  const big=files.filter(f=>f.size>MAX).length;
-  const total=files.reduce((s,f)=>s+f.size,0);
-  d.innerHTML=`<h2 style="margin:0">Fichiers reçus (${files.length})</h2>
-  <p class="note" data-no-i18n>${files.slice(0,8).map(f=>esc(f.name)+' ('+mb(f.size)+')').join('<br>')}${files.length>8?'<br>… et '+(files.length-8)+' autres':''}<br><b>Total : ${mb(total)}</b></p>
-  ${big?`<p class="note" style="color:var(--rd)">${big} fichier(s) dépassent 25 Mo et seront ignorés (compressez la vidéo).</p>`:''}
+  d.innerHTML=`<h2 style="margin:0">${picker?'Envoyer des fichiers':'Fichiers reçus ('+files.length+')'}</h2>
   <label>Ajouter à</label>
   <select id="shT"><option value="">— Choisir un bien ou un client —</option>${group('biens','Biens')}${group('clients','Clients')}</select>
+  ${picker?`<label>Fichiers (photos, vidéos, documents)</label><input type="file" id="shF" multiple accept="${ACCEPT}"><p class="note">Sélectionnez plusieurs fichiers d'un coup. Sur ordinateur, vous pouvez aussi les glisser ici.</p>`:''}
+  <div id="shL" class="note" data-no-i18n></div>
   ${progHtml}
   <div class="row"><button type="button" class="btn sec" id="shX">Annuler</button><button type="button" class="btn" id="shOk">Envoyer</button></div>`;
-  let busy=false;
+  const list=()=>{
+    const big=chosen.filter(f=>f.size>MAX).length,total=chosen.reduce((s,f)=>s+f.size,0);
+    d.querySelector('#shL').innerHTML=chosen.length
+      ?chosen.slice(0,8).map(f=>esc(f.name)+' ('+mb(f.size)+')').join('<br>')+(chosen.length>8?'<br>… et '+(chosen.length-8)+' autres':'')+`<br><b>${chosen.length} fichier(s) — ${mb(total)}</b>`+(big?`<br><span style="color:var(--rd)">${big} fichier(s) dépassent 25 Mo et seront ignorés (compressez la vidéo).</span>`:'')
+      :'';
+  };
+  list();
+  if(picker){
+    d.querySelector('#shF').onchange=ev=>{chosen=[...ev.target.files];list()};
+    d.ondragover=ev=>ev.preventDefault();
+    d.ondrop=ev=>{ev.preventDefault();if(ev.dataTransfer&&ev.dataTransfer.files.length){chosen=[...ev.dataTransfer.files];list()}};
+  }
   d.oncancel=ev=>{if(busy)ev.preventDefault()};
-  d.querySelector('#shX').onclick=async()=>{if(busy)return;await clearShared();d.close()};
+  d.querySelector('#shX').onclick=async()=>{if(busy)return;if(!picker)await clearShared();d.close()};
   d.querySelector('#shOk').onclick=async()=>{
     const v=d.querySelector('#shT').value;
     if(!v){alert('Choisissez un bien ou un client.');return}
+    if(!chosen.length){alert('Choisissez au moins un fichier.');return}
     if(!C.token||!C.repo){alert("Configurez d'abord la Synchronisation.");return}
     const [kind,id]=v.split(':'),rec=D[kind].find(x=>x.id===id);
     if(!rec){alert('Fiche introuvable.');return}
     busy=true;
     d.querySelector('#shOk').disabled=true;d.querySelector('#shX').disabled=true;
-    batch={total:files.length,done:0,ok:0,fail:[]};
-    for(const f of files)await window.upFile(rec,f);
-    await clearShared();
+    batch={total:chosen.length,done:0,ok:0,fail:[]};
+    for(const f of chosen)await window.upFile(rec,f);
+    if(!picker)await clearShared();
     busy=false;d.close();
     tab=kind;
     try{F={q:'',a:'',b:'',city:'',type:'',pmin:'',pmax:''}}catch(e){}
@@ -142,6 +157,17 @@ function openShare(files){
   d.showModal();
 }
 
+/* Bouton « 📎 Fichiers » dans l'en-tête */
+(()=>{
+  const sync=document.getElementById('bSync');
+  if(!sync||document.getElementById('bFiles'))return;
+  const b=document.createElement('button');
+  b.type='button';b.className='btn sec';b.id='bFiles';b.textContent='📎 Fichiers';
+  b.onclick=()=>openDialog(null);
+  sync.before(b);
+})();
+
+/* Arrivée d'un partage (Android) */
 (async()=>{
   const q=new URLSearchParams(location.search);
   if(!q.has('share'))return;
@@ -152,7 +178,7 @@ function openShare(files){
   try{
     const files=await readShared();
     if(!files.length){alert("Les fichiers partagés n'ont pas été retrouvés. Refaites le partage.");return}
-    openShare(files);
+    openDialog(files);
   }catch(e){alert('Réception impossible : '+e.message)}
 })();
 })();
