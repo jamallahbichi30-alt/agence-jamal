@@ -1,4 +1,4 @@
-const V='agence-v14',SHARE='immo-share',ASSETS=['./','./index.html','./manifest.json','./partage.js','./icon-192.png','./icon-512.png'];
+const V='agence-v15',SHARE='immo-share',ASSETS=['./','./index.html','./manifest.json','./partage.js','./design.css','./design-v2.css','./typo.css','./fonts/immo-titre.woff','./fonts/immo-texte.woff','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>Promise.allSettled(ASSETS.map(a=>c.add(a)))).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==V&&x!==SHARE).map(x=>caches.delete(x)))).then(()=>self.clients.claim()))});
 

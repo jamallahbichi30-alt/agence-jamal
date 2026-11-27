@@ -1,0 +1,87 @@
+/* =====================================================================
+   Immo-Gest — typographie
+   À charger EN DERNIER :
+     design.css  →  design-v2.css  →  typo.css
+   Polices hébergées dans l'application (fonctionne hors connexion) :
+   - Montserrat (titres, chiffres clés) : la police du logo lui-même
+   - Source Sans 3 (texte, tableaux, formulaires) : sobre, très lisible en petit
+   Licence des deux : SIL Open Font License.
+   ===================================================================== */
+
+@font-face{font-family:"Immo Titre";src:url("fonts/immo-titre.woff") format("woff");
+  font-weight:600 800;font-style:normal;font-display:swap}
+@font-face{font-family:"Immo Texte";src:url("fonts/immo-texte.woff") format("woff");
+  font-weight:400 700;font-style:normal;font-display:swap}
+
+:root{
+  /* Les polices ne contiennent que l'alphabet latin : l'arabe passe automatiquement
+     aux polices du téléphone / de l'ordinateur listées ensuite. */
+  --font:"Immo Texte","Segoe UI",system-ui,-apple-system,Roboto,"Noto Sans","Noto Naskh Arabic","Geeza Pro",Tahoma,Arial,sans-serif;
+  --font-titre:"Immo Titre","Noto Kufi Arabic","Segoe UI",system-ui,-apple-system,Roboto,"Noto Sans","Geeza Pro",Tahoma,Arial,sans-serif;
+
+  /* Échelle typographique (rapport ≈ 1,2) */
+  --fs-xs:12.5px;
+  --fs-sm:14px;
+  --fs-md:16px;
+  --fs-lg:19px;
+  --fs-xl:clamp(22px,2.2vw,26px);
+  --fs-2xl:clamp(26px,3vw,34px);
+}
+
+/* ---------- Texte courant ---------- */
+html{font-family:var(--font)}
+body{font-family:var(--font);font-size:var(--fs-md);line-height:1.5;font-kerning:normal;font-feature-settings:"kern","liga"}
+input,select,textarea,button{font-family:var(--font)}
+input,select,textarea{font-size:var(--fs-md)}
+label{font-size:var(--fs-sm);font-weight:600;letter-spacing:0}
+.note{font-size:var(--fs-sm)}
+table{font-size:15.5px}
+th{font-size:var(--fs-xs);font-weight:600}
+.tag{font-size:var(--fs-xs);font-weight:600}
+.btn{font-size:15px;font-weight:600;letter-spacing:0}
+header nav button{font-size:15px}
+td,.dash-stat-value,.kp b,.dash-mini b,#cnt{font-variant-numeric:tabular-nums}
+
+/* ---------- Titres : Montserrat, comme le logo ---------- */
+h1,h2,h3,
+header h1,
+.bar h2,
+.dash-welcome h2,
+.dash-section-title h3,
+dialog h2{font-family:var(--font-titre);font-optical-sizing:auto}
+
+header h1{font-size:19px;font-weight:700;letter-spacing:-.005em}
+.bar h2{font-size:var(--fs-xl);font-weight:700;letter-spacing:-.02em}
+.dash-welcome h2{font-size:var(--fs-2xl);font-weight:700;letter-spacing:-.03em;line-height:1.15}
+.dash-section-title h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:-.01em}
+dialog h2{font-size:21px;font-weight:700;letter-spacing:-.015em}
+h3{font-size:var(--fs-lg);font-weight:700}
+
+/* Chiffres clés : même famille que les titres, un cran plus léger pour rester élégants */
+.dash-stat-value,.kp b{font-family:var(--font-titre);font-weight:700;letter-spacing:-.025em;line-height:1.1}
+.dash-stat-value{font-size:clamp(24px,2.4vw,30px)}
+.kp b{font-size:clamp(24px,2.4vw,28px)}
+.dash-stat-unit{font-family:var(--font);font-size:var(--fs-sm);font-weight:600;letter-spacing:0}
+.dash-stat-top,.kp span{font-size:var(--fs-sm)}
+
+/* ---------- Documents imprimés (factures, reçus, fiches) ---------- */
+#dd,#prt{font-family:var(--font)}
+#dd [style*="font-size:26px"],#prt [style*="font-size:26px"],
+#dd [style*="font-size:19px"],#prt [style*="font-size:19px"],
+#fv h1{font-family:var(--font-titre)}
+
+/* ---------- Arabe (droite à gauche) ----------
+   Les espacements négatifs coupent les lettres liées : on les supprime,
+   et on aère un peu plus les lignes. */
+html[dir="rtl"] *{letter-spacing:0!important}
+html[dir="rtl"] body{line-height:1.7}
+html[dir="rtl"] .dash-welcome h2,
+html[dir="rtl"] .bar h2,
+html[dir="rtl"] dialog h2{line-height:1.45}
+
+/* ---------- Mobile ---------- */
+@media (max-width:899.98px){
+  body{font-size:16px}
+  header h1{font-size:18px}
+  table{font-size:15px}
+}

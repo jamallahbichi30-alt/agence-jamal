@@ -1,0 +1,88 @@
+/* =====================================================================
+   Immo-Gest — design v2 (améliorations)
+   À charger APRÈS design.css :
+     <link rel="stylesheet" href="design.css">
+     <link rel="stylesheet" href="design-v2.css">
+   Pour annuler : supprimez simplement ce fichier.
+   ===================================================================== */
+
+/* ---------- 1. Lisibilité : contrastes corrigés (AA) ---------- */
+:root{
+  --mu:#586377;            /* texte secondaire plus lisible sur fond crème */
+  --gold-d:#86611a;        /* liens dorés : 5,6:1 au lieu de 4,3:1 */
+  --warn:#85580a;
+  --ph:#7a8496;            /* couleur des placeholders */
+  --bd-hover:#cfc7b0;
+  --r:12px;                /* hiérarchie des rayons : 10 / 12 / 20 / pilule */
+  --r-sm:10px;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --mu:#a7b4cb;
+    --ph:#7f8da8;
+    --bd-hover:#34466a;
+    --warn:#e3b455;
+  }
+}
+input::placeholder,textarea::placeholder{color:var(--ph)}
+input:hover,select:hover,textarea:hover{border-color:var(--bd-hover)}  /* ne casse plus le mode sombre */
+
+/* ---------- 2. Mouvement : une seule entrée de page, le reste répond au clic ---------- */
+main>*{animation:none}
+.dash-stat:hover{transform:none;box-shadow:var(--sh1)}
+.dash-shortcuts button:hover{transform:none}
+
+/* ---------- 3. Boutons ---------- */
+.btn{border-radius:var(--r-sm)}
+.btn:not(.sec):not(.del):hover{background:color-mix(in srgb,var(--ac) 86%,#fff)}
+.btn.sec{border-color:var(--bd)}
+.btn.sec:hover{border-color:var(--gold);box-shadow:none}
+.btn.del:hover{color:var(--bad)}
+.btn:focus-visible{outline-offset:3px}
+
+/* ---------- 4. Tableaux : plus calmes, la 1re colonne porte l'information ---------- */
+th{text-transform:none;letter-spacing:.01em;font-size:12.5px;font-weight:600}
+.tw tbody td:first-child{font-weight:600}
+td{font-variant-numeric:tabular-nums}
+tbody tr:last-child td{border-bottom:0}
+tbody tr[data-id]:focus-visible{outline-offset:-2px;background:var(--sf2)}
+.tag.ok{background:var(--ok-bg);color:var(--ok)}
+
+/* ---------- 5. Tableau de bord : icônes sobres, seule l'alerte garde sa couleur ---------- */
+.dash-stat:nth-child(n) .dash-icon{background:var(--ac2);color:var(--ac)}
+.dash-stat:nth-child(5) .dash-icon{background:var(--bad-bg);color:var(--bad)}
+.dash-stat-value{font-size:clamp(26px,2.6vw,32px)}
+.dash-panel,.dash-stat,.kp>div{border-radius:var(--r-lg)}
+.dash-shortcuts button{border-radius:var(--r-sm);font-weight:600}
+.empty{border:1px dashed var(--bd);border-radius:var(--r);margin:16px}
+
+/* ---------- 6. Menu ---------- */
+header nav button{font-weight:600}
+@media (min-width:900px){
+  header nav button{padding:11px 14px}
+  header nav button.on{background:rgba(201,164,92,.22)}
+}
+@media (max-width:899.98px){
+  header nav button.on{box-shadow:inset 0 -2px 0 var(--gold)}
+}
+
+/* ---------- 7. Mobile : pas de zoom automatique iOS, zones tactiles confortables ---------- */
+@media (max-width:899.98px){
+  input,select,textarea{font-size:16px}
+  .btn{min-height:44px}
+  .btn.del,.btn.dash-action{min-height:40px}
+}
+
+/* ---------- 8. Fenêtres ---------- */
+dialog{border-radius:var(--r-lg)}
+dialog h2{margin-top:0;padding-bottom:12px;border-bottom:1px solid var(--bd)}
+@media (max-width:640px){
+  dialog[open]::before{content:"";display:block;width:40px;height:4px;border-radius:99px;background:var(--bd);margin:-8px auto 14px}
+}
+
+/* ---------- 9. Détails ---------- */
+.bar h2{font-size:clamp(22px,2.4vw,28px)}
+#cnt{font-variant-numeric:tabular-nums}
+@media (forced-colors:active){
+  .btn,.tag,.dash-stat{border:1px solid CanvasText}
+}
